@@ -1,0 +1,15 @@
+ID_REF	item1	item2	item3	item4	item5	item6
+gene1	ok	.	.	.	.	.
+gene2	.	ok	.	ok	.	ok
+gene3	ok	ok	.	.	ok	ok
+gene4	.	ok	.	ok	.	.
+gene5	.	.	ok	.	ok	.
+gene6	ok	ok	.	.	.	.
+gene7	.	.	.	ok	ok	ok
+gene8	ok	ok	.	ok	.	.
+gene9	.	.	ok	.	ok	ok
+gene10	.	.	.	ok	ok	ok
+gene11	ok	ok	.	.	.	.
+gene12	ok	.	.	.	.	ok
+gene13	ok	ok	.	.	ok	.
+gene14	.	.	ok	ok	ok	ok
