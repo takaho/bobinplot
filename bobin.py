@@ -2,16 +2,25 @@ import os, sys, re, math, collections
 
 
 class BobinGraphDrawer(object):
+    """Bobin graph drawing class """
     def __init__(self, graph):
         self.__graph = graph
         self.__angle = 0
         self.__size = 100
         self.__diameters = [150, 200, 350] # cluster inner, cluster outer, elements outer
         self.__curveture = 0.25#0.33#25
-    def draw_elements(self, canvas):
-        pass
-    def draw_edges(self, canvas):
-        pass
+        self.__linewidth = {'cluster':1, 'curve':0.25}
+
+    # def draw_elements(self, canvas):
+    #     pass
+    # def draw_edges(self, canvas):
+    #     pass
+    def set_line_width(self, name, width):
+        if name in self.__linewidth and 0 < width < 10:
+            self.__linewidth[name] = width
+
+    def get_line_width(self, name):
+        return self.__linewidth[name]
 
     def __draw_cluster_pdf(self, cluster, cnv, center, path, theta0, theta1, r, rmax):
         cx, cy = center
@@ -43,28 +52,44 @@ class BobinGraphDrawer(object):
         return theta
 
     def draw_on_pdf(self, cnv):
+        """Draw graph using ReportLab API """
         cluster = self.__graph.cluster_tree
-        print(cluster)
+        #print(cluster)
         theta_per_elem = math.pi * 2 / cluster.size
         theta = self.__angle
         rmax = self.__diameters[1] * .5
         r = self.__diameters[0] * .5
         center = 300, 400
+        # cluster
         path = cnv.beginPath()
         self.__draw_cluster_pdf(cluster, cnv, center, path, theta, theta + math.pi * 2, r, rmax)
         t = theta + math.pi * 2 / cluster.size * .5
         dt = math.pi * 2 / cluster.size
-        r_elem = self.__diameters[1] * .5
         cnv.saveState()
         cnv.setLineCap(2)
+        cnv.setLineWidth(self.__linewidth['cluster'])
         cnv.drawPath(path)
+
+        #items
         item2index = []
+        r_branch = self.__diameters[1] * .5
+        r_elem = self.__diameters[2] * .5
         for elem in cluster.nodes:
-            x0 = center[0] + r_elem * math.cos(t)
-            y0 = center[1] + r_elem * math.sin(t)
-            cnv.translate(x0, y0)
+            x0 = center[0] + r_branch * math.cos(t)
+            y0 = center[1] + r_branch * math.sin(t)
+
+            x1 = center[0] + r_elem * math.cos(t)
+            y1 = center[1] + r_elem * math.sin(t)
+
+            cnv.setFillColor('gray')
+            num_genes = len(self.__graph.get_items(elem.name))
+            for i in range(num_genes):
+                x_ = (float(x1 - x0) * i / (num_genes - 1) + x0) if x0 != x1 else x0
+                y_ = (float(y1 - y0) * i / (num_genes - 1) + y0) if y0 != y1 else y0
+                cnv.circle(x_, y_, 1, 0, 1)
+            cnv.translate(x1, y1)
             cnv.rotate(t * 180 / math.pi)
-            cnv.drawString(0, 0, elem.name)
+            cnv.drawString(10, 0, elem.name)
             cnv.resetTransforms()
             i2i = {}
             for i, item in enumerate(self.__graph.get_items(elem.name)):
@@ -79,6 +104,8 @@ class BobinGraphDrawer(object):
             if abs(i - j) == 1:
                 return 'red'
             return 'navy'
+        thickness = self.__linewidth['curve']
+
         for i in range(cluster.size):
             theta1 = self.__angle + (i + .5) * math.pi * 2 / cluster.size
             itemlist1 = item2index[i]
@@ -111,8 +138,8 @@ class BobinGraphDrawer(object):
                 for item1, i1 in itemlist1.items():
                     if item1 in itemlist2:
                         i2 = itemlist2[item1]
-                        rad1 = ((dia2 - dia1) * i1 / num1 + dia1) * .5
-                        rad2 = ((dia2 - dia1) * i2 / num2 + dia1) * .5
+                        rad1 = ((dia2 - dia1) * i1 / (num1 - 1) + dia1) * .5
+                        rad2 = ((dia2 - dia1) * i2 / (num2 - 1) + dia1) * .5
                         x1 = cx + rad1 * math.cos(theta1)
                         y1 = cy + rad1 * math.sin(theta1)
                         x2 = cx + rad2 * math.cos(theta2)
@@ -128,9 +155,9 @@ class BobinGraphDrawer(object):
                         path.moveTo(x1, y1)
                         path.curveTo(x3, y3, x4, y4, x2, y2)
                         accepted += 1
-                print(i, j, accepted, __get_color(i, j))
+                #print(i, j, accepted, __get_color(i, j))
                         #print(x1, y1, x2, y2, x3, y3, x4, y4)
-                cnv.setLineWidth(1)#0.1)
+                cnv.setLineWidth(thickness)#0.25)#0.1)
                 #print(i, j, __get_color(i,j))
                 cnv.setStrokeColor(__get_color(i, j))
                 cnv.drawPath(path)
@@ -139,6 +166,7 @@ class BobinGraphDrawer(object):
 
 
 class BobinGraph(object):
+    """Bobin graph managing class """
     class node(object):
         def __init__(self):
             pass
@@ -233,7 +261,7 @@ class BobinGraph(object):
                         maxcor = cor
                         maxpair = i, j
             b, a = maxpair
-            print(loop, a, b, maxcor)
+            #print(loop, a, b, maxcor)
             nodes[a] = BobinGraph.branch(nodes[a], nodes[b])
             nodes[b] = None
             for i in range(N):
@@ -264,7 +292,32 @@ class BobinGraph(object):
         else:
             return (a - b) / math.sqrt(n0_ * n1_ * n_0 * n_1)
 
-if __name__ == '__main__':
+    def load_table(self, filename):
+        """Load data from tab delimited file """
+        with open(filename) as fi:
+            # fiest line
+            num_lines = 0
+            names = None
+            for line in fi:
+                if line.startswith('#'): continue
+                items = line.strip().split('\t')
+                if names is None:
+                    names = items[1:]
+                    num_elements = len(names)
+                    elements = [[] for i in range(num_elements)]
+                else:
+                    name = items[0]
+                    for i in range(min(len(items) - 1, num_elements)):
+                        elem = items[i + 1].lower()
+                        if elem == 'yes' or elem == '+' or elem == 'o' or elem == 'ok':
+                            elements[i].append(name)
+                    num_lines += 1
+            self.__set_total(num_lines)
+            for i in range(num_elements):
+                self.add_element(names[i], elements[i])
+
+
+def test_with_random():
     import random
     b = BobinGraph('test')
     b.N = 100
@@ -284,3 +337,30 @@ if __name__ == '__main__':
     cnv = reportlab.pdfgen.canvas.Canvas('test.pdf')
     graph.draw_on_pdf(cnv)
     cnv.save()
+
+def main():
+    import argparse
+    import reportlab.pdfgen.canvas
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', metavar='filename', help='table in plain text')
+    parser.add_argument('-o', metavar='filename', help='PDF filename')
+    parser.add_argument('-t', metavar='title', help='Title of graph')
+    parser.add_argument('--verbose', action='store_true', help="verbosity")
+    args = parser.parse_args()
+
+    title = args.t
+    filename = args.i
+    filename_pdf = args.o
+
+    b = BobinGraph(title)
+    b.load_table(filename)
+    graph = BobinGraphDrawer(b)
+
+    cnv = reportlab.pdfgen.canvas.Canvas(filename_pdf)
+    graph.draw_on_pdf(cnv)
+    cnv.save()
+
+
+if __name__ == '__main__':
+    main()
